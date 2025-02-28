@@ -1,0 +1,14 @@
+# 路由管理
+npm install vue-router@4
+
+# UI组件库（建议使用Element Plus）
+npm install element-plus
+
+# HTTP请求库
+npm install axios
+
+# 状态管理（可选）
+npm install pinia 
+
+# 开发依赖
+npm install -D typescript @types/node 
