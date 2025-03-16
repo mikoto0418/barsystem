@@ -1,21 +1,23 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getProducts, deleteProduct } from '@/api/product'
+import { getProducts, deleteProduct, getCategories } from '@/api/product'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import CategoryManagement from './CategoryManagement.vue'
 
 const router = useRouter()
 const loading = ref(false)
 const products = ref([])
+const categories = ref([])
+const categoryManagementVisible = ref(false)
 
 const formatCategory = (category) => {
-    const categoryMap = {
-        'BAIJIU': '白酒',
-        'RED_WINE': '红酒',
-        'BEER': '啤酒',
-        'FOREIGN': '洋酒'
+    // 从本地存储的类别数据中查找对应的类别名称
+    const foundCategory = categories.value.find(item => item.value === category)
+    if (foundCategory) {
+        return foundCategory.label
     }
-    return categoryMap[category] || category
+    return category
 }
 
 const formatTemperature = (temp) => {
@@ -64,7 +66,64 @@ const handleDelete = async (row) => {
     }
 }
 
-onMounted(() => {
+// 打开类别管理对话框
+const openCategoryManagement = () => {
+    categoryManagementVisible.value = true
+}
+
+// 处理类别管理对话框确认
+const handleCategoryConfirm = (updatedCategories) => {
+    categories.value = updatedCategories
+    // 由于后端没有提供保存类别的API，我们只在前端保存类别信息
+    // 确保类别数据结构正确，只包含label和value属性
+    localStorage.setItem('productCategories', JSON.stringify(updatedCategories))
+    // 刷新商品列表，以便立即显示更新后的类别名称
+    fetchProducts()
+    ElMessage.success('类别设置已保存')
+}
+
+// 获取类别列表
+const fetchCategories = async () => {
+    try {
+        // 先尝试从本地存储获取类别列表
+        const savedCategories = localStorage.getItem('productCategories')
+        if (savedCategories) {
+            categories.value = JSON.parse(savedCategories)
+            return
+        }
+        
+        // 如果本地没有，尝试从API获取
+        try {
+            const response = await getCategories()
+            if (response && response.length > 0) {
+                categories.value = response
+                return
+            }
+        } catch (error) {
+            console.error('API获取类别列表失败:', error)
+        }
+        
+        // 如果以上都失败，使用默认类别
+        categories.value = [
+            { label: '白酒', value: 'BAIJIU' },
+            { label: '红酒', value: 'RED_WINE' },
+            { label: '啤酒', value: 'BEER' },
+            { label: '洋酒', value: 'FOREIGN' }
+        ]
+    } catch (error) {
+        console.error('获取类别列表失败:', error)
+        // 使用默认类别
+        categories.value = [
+            { label: '白酒', value: 'BAIJIU' },
+            { label: '红酒', value: 'RED_WINE' },
+            { label: '啤酒', value: 'BEER' },
+            { label: '洋酒', value: 'FOREIGN' }
+        ]
+    }
+}
+
+onMounted(async () => {
+    await fetchCategories()
     fetchProducts()
 })
 </script>
@@ -73,7 +132,10 @@ onMounted(() => {
     <div class="product-list">
         <div class="header">
             <h2>商品管理</h2>
-            <el-button type="primary" @click="handleAdd">新增商品</el-button>
+            <div class="header-buttons">
+                <el-button type="primary" @click="openCategoryManagement">类别设置</el-button>
+                <el-button type="primary" @click="handleAdd">新增商品</el-button>
+            </div>
         </div>
 
         <el-table v-loading="loading" :data="products" border style="width: 100%">
@@ -110,6 +172,13 @@ onMounted(() => {
             </el-table-column>
         </el-table>
     </div>
+    
+    <!-- 类别管理对话框 -->
+    <CategoryManagement
+        v-model:visible="categoryManagementVisible"
+        :initial-categories="categories"
+        @confirm="handleCategoryConfirm"
+    />
 </template>
 
 <style scoped>
@@ -129,5 +198,10 @@ onMounted(() => {
 
 .header h2 {
     margin: 0;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 10px;
 }
 </style>

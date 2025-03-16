@@ -12,9 +12,12 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0',
+    port: 5173
+  },
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',  // 改用 127.0.0.1 而不是 localhost
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api'), // 添加路径重写规则
         secure: false, // 添加此配置
@@ -22,4 +25,4 @@ export default defineConfig({
       }
     }
   }
-})
+)

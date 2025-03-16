@@ -12,6 +12,15 @@
       <template v-if="product">
         <h2>{{ product.name }}</h2>
         
+        <!-- 添加商品图片显示区域 -->
+        <div class="product-image" v-if="product.image_url">
+          <img :src="product.image_url" :alt="product.name" />
+        </div>
+        <div class="product-image no-image" v-else>
+          <img src="/wine-glass.svg" alt="No Image" class="no-image-icon" />
+          <span>{{ $t('product.noImage') }}</span>
+        </div>
+        
         <div class="info-section">
           <div class="info-item">
             <span class="label">{{ $t('product.category') }}</span>
@@ -74,6 +83,7 @@ import { getProduct } from '@/api/product'
 import { getCartItems, saveCartItems } from '@/utils/cart'
 import { useI18n } from 'vue-i18n'
 import LanguageSwitch from '@/components/common/LanguageSwitch.vue'
+import { ArrowLeft, Picture } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -85,14 +95,16 @@ const temperatureChoice = ref('COLD')
 
 // 格式化分类
 const formatCategory = (category) => {
-  const categoryMap = {
-    'WHITE_WINE': '白酒',
-    'RED_WINE': '红酒',
-    'BEER': '啤酒',
-    'COCKTAIL': '鸡尾酒',
-    'SOFT_DRINK': '软饮'
+  // 从本地存储获取类别数据
+  const savedCategories = localStorage.getItem('productCategories')
+  if (savedCategories) {
+    const categories = JSON.parse(savedCategories)
+    const foundCategory = categories.find(item => item.value === category)
+    if (foundCategory) {
+      return foundCategory.label
+    }
   }
-  return categoryMap[category] || category
+  return category
 }
 
 // 格式化温度要求
@@ -176,6 +188,45 @@ onMounted(() => {
   box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
 }
 
+.detail-content h2 {
+  color: #333;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+/* 添加商品图片样式 */
+.product-image {
+  width: 100%;
+  height: 300px;
+  margin-bottom: 30px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f8f8f8;
+}
+
+.product-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.product-image.no-image {
+  color: #909399;
+  flex-direction: column;
+  background-color: #f0f0f0;
+  border: 1px dashed #dcdfe6;
+}
+
+.product-image.no-image .no-image-icon {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 10px;
+  opacity: 0.7;
+}
+
 .info-section {
   margin: 30px 0;
 }
@@ -228,4 +279,4 @@ onMounted(() => {
   margin-right: 0;
   margin-left: 10px;
 }
-</style> 
+</style>

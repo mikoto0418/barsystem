@@ -13,11 +13,13 @@
       </el-form-item>
       
       <el-form-item label="类别" prop="category">
-        <el-select v-model="form.category" placeholder="请选择类别">
-          <el-option label="白酒" value="BAIJIU" />
-          <el-option label="红酒" value="RED_WINE" />
-          <el-option label="啤酒" value="BEER" />
-          <el-option label="洋酒" value="FOREIGN" />
+        <el-select v-model="form.category" placeholder="请选择类别" class="category-select">
+          <el-option 
+            v-for="item in categories" 
+            :key="item.value" 
+            :label="item.label" 
+            :value="item.value" 
+          />
         </el-select>
       </el-form-item>
       
@@ -41,11 +43,11 @@
       </el-form-item>
 
       <el-form-item label="温度要求" prop="temperature_requirement">
-        <el-select v-model="form.temperature_requirement" placeholder="请选择温度要求">
-          <el-option label="冷饮" value="COLD" />
-          <el-option label="热饮" value="HOT" />
-          <el-option label="冷热皆可" value="BOTH" />
-        </el-select>
+        <el-radio-group v-model="form.temperature_requirement">
+          <el-radio label="COLD">冷饮</el-radio>
+          <el-radio label="HOT">热饮</el-radio>
+          <el-radio label="BOTH">冷热皆可</el-radio>
+        </el-radio-group>
       </el-form-item>
 
       <el-form-item label="描述" prop="description">
@@ -57,24 +59,45 @@
         />
       </el-form-item>
       
+      <el-form-item label="商品图片" prop="image">
+        <el-upload
+          class="product-image-uploader"
+          :action="'#'"
+          :http-request="handleImageUpload"
+          :show-file-list="false"
+          :before-upload="beforeImageUpload"
+        >
+          <img v-if="imageUrl" :src="imageUrl" class="product-image" />
+          <el-icon v-else class="product-image-uploader-icon"><Plus /></el-icon>
+        </el-upload>
+        <div class="image-tip" v-if="!imageUrl">点击上传商品图片</div>
+        <div class="image-tip" v-else>点击更换图片</div>
+      </el-form-item>
+      
       <el-form-item>
         <el-button type="primary" @click="handleSubmit" :loading="loading">保存</el-button>
         <el-button @click="handleCancel">取消</el-button>
       </el-form-item>
     </el-form>
   </div>
+
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getProduct, createProduct, updateProduct } from '@/api/product'
+import { getProduct, createProduct, updateProduct, uploadProductImage, getCategories } from '@/api/product'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import CategoryManagement from './CategoryManagement.vue'
 
 const route = useRoute()
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
+const imageUrl = ref('')
+const imageFile = ref(null)
+const categories = ref([])
 
 const isEdit = computed(() => !!route.params.id)
 
@@ -108,7 +131,52 @@ const rules = {
   ]
 }
 
+
+
+// 获取类别列表
+const fetchCategories = async () => {
+  try {
+    // 先尝试从本地存储获取类别列表
+    const savedCategories = localStorage.getItem('productCategories')
+    if (savedCategories) {
+      categories.value = JSON.parse(savedCategories)
+      return
+    }
+    
+    // 如果本地没有，尝试从API获取
+    try {
+      const response = await getCategories()
+      if (response && response.length > 0) {
+        categories.value = response
+        return
+      }
+    } catch (error) {
+      console.error('API获取类别列表失败:', error)
+    }
+    
+    // 如果以上都失败，使用默认类别
+    categories.value = [
+      { label: '白酒', value: 'BAIJIU' },
+      { label: '红酒', value: 'RED_WINE' },
+      { label: '啤酒', value: 'BEER' },
+      { label: '洋酒', value: 'FOREIGN' }
+    ]
+  } catch (error) {
+    console.error('获取类别列表失败:', error)
+    // 使用默认类别
+    categories.value = [
+      { label: '白酒', value: 'BAIJIU' },
+      { label: '红酒', value: 'RED_WINE' },
+      { label: '啤酒', value: 'BEER' },
+      { label: '洋酒', value: 'FOREIGN' }
+    ]
+  }
+}
+
 onMounted(async () => {
+  // 获取类别列表
+  await fetchCategories()
+  
   if (isEdit.value) {
     try {
       loading.value = true
@@ -121,6 +189,11 @@ onMounted(async () => {
         temperature_requirement: response.temperature_requirement || 'COLD',
         description: response.description || ''
       }
+      
+      // 设置图片URL
+      if (response.image_url) {
+        imageUrl.value = response.image_url
+      }
     } catch (err) {
       console.error('获取商品信息失败:', err)
       ElMessage.error('获取商品信息失败')
@@ -129,6 +202,48 @@ onMounted(async () => {
     }
   }
 })
+
+// 图片上传前的验证
+const beforeImageUpload = (file) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt2M = file.size / 1024 / 1024 < 2
+
+  if (!isImage) {
+    ElMessage.error('上传文件只能是图片格式!')
+    return false
+  }
+  if (!isLt2M) {
+    ElMessage.error('上传图片大小不能超过 2MB!')
+    return false
+  }
+  
+  imageFile.value = file
+  return true
+}
+
+// 自定义图片上传处理
+const handleImageUpload = async (options) => {
+  try {
+    if (!imageFile.value) return
+    
+    // 如果是编辑模式且已有商品ID，直接上传图片
+    if (isEdit.value) {
+      const result = await uploadProductImage(route.params.id, imageFile.value)
+      imageUrl.value = result.url
+      ElMessage.success('图片上传成功')
+    } else {
+      // 如果是新增模式，先创建一个本地预览
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        imageUrl.value = e.target.result
+      }
+      reader.readAsDataURL(imageFile.value)
+    }
+  } catch (error) {
+    console.error('图片上传失败:', error)
+    ElMessage.error('图片上传失败')
+  }
+}
 
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -147,7 +262,19 @@ const handleSubmit = async () => {
       await updateProduct(route.params.id, submitData)
       ElMessage.success('更新成功')
     } else {
-      await createProduct(submitData)
+      // 新增商品
+      const result = await createProduct(submitData)
+      
+      // 如果有选择图片，上传图片
+      if (imageFile.value && result.id) {
+        try {
+          await uploadProductImage(result.id, imageFile.value)
+        } catch (error) {
+          console.error('图片上传失败:', error)
+          ElMessage.warning('商品创建成功，但图片上传失败')
+        }
+      }
+      
       ElMessage.success('创建成功')
     }
     router.push({ name: 'product-list' })
@@ -181,4 +308,54 @@ const handleCancel = () => {
 .el-select {
   width: 180px;
 }
-</style> 
+
+.product-image-uploader {
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  width: 178px;
+  height: 178px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.product-image-uploader:hover {
+  border-color: #409EFF;
+}
+
+.product-image-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 178px;
+  height: 178px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.product-image {
+  width: 178px;
+  height: 178px;
+  display: block;
+  object-fit: cover;
+}
+
+.image-tip {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.category-select-container {
+  display: flex;
+  align-items: center;
+}
+
+.category-select {
+  width: 180px;
+  margin-right: 10px;
+}
+</style>

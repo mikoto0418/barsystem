@@ -237,13 +237,16 @@ const { t } = useI18n()
 
 // 格式化分类
 const formatCategory = (category) => {
-  const categoryMap = {
-    'BAIJIU': '白酒',
-    'RED_WINE': '红酒',
-    'BEER': '啤酒',
-    'FOREIGN': '洋酒'
+  // 从本地存储获取类别数据
+  const savedCategories = localStorage.getItem('productCategories')
+  if (savedCategories) {
+    const categories = JSON.parse(savedCategories)
+    const foundCategory = categories.find(item => item.value === category)
+    if (foundCategory) {
+      return foundCategory.label
+    }
   }
-  return categoryMap[category] || category
+  return category
 }
 
 // 过滤商品
@@ -650,4 +653,4 @@ onMounted(() => {
   font-weight: 500;
   font-size: 16px;
 }
-</style> 
+</style>
